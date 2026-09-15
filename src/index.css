@@ -1,0 +1,271 @@
+/* ────────────────────────────────────────────────────────────────────────────
+   Bảng màu "văn phòng phẩm": giấy 원고지 ngà (paper), mực đen (ink), lưới
+   xanh lá đậm (grid), accent đất nung (terracotta) — tránh tông kem-be+serif
+   tương phản cao hoặc nền đen+neon xanh/cam kiểu AI-generated mặc định.
+
+   Có 2 theme (tối mặc định / sáng) chọn qua thuộc tính data-theme trên
+   <html>, do App.tsx set dựa trên lựa chọn đã lưu hoặc prefers-color-scheme
+   của hệ thống — xem nút chuyển theme trên header.
+   ──────────────────────────────────────────────────────────────────────────── */
+:root {
+  --bg: #14191b;
+  --bg-soft: #1b2224;
+  --line: #2c3638;
+  --paper: #f7f2e4;
+  --paper-shadow: #e9e0c9;
+  --grid: #3f7a5c;
+  --grid-soft: #a9c2ae;
+  --ink: #1b1a15;
+  --accent: #bd5a3c;
+  --accent-soft: #e0a98f;
+  --text: #e4e6df;
+  --dim: #93a09a;
+  --danger: #c65b4e;
+
+  /* bo góc mềm cho khung UI (nút, thẻ, modal) — lưới 원고지 kẻ ô thì giữ
+     nguyên vuông vức vì bản chất là giấy kẻ ô thật, chỉ phần khung UI xung
+     quanh mới bo tròn cho bớt cứng nhắn. */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  /* Trắng/xám trung tính thay vì vàng ngà — vàng trên nền sáng khó đọc.
+     Riêng --paper vẫn ngả ấm rất nhẹ để còn gợi cảm giác "giấy". */
+  --bg: #ffffff;
+  --bg-soft: #f4f4f1;
+  --line: #e2e0d8;
+  --paper: #fffefa;
+  --paper-shadow: #eeece4;
+  --grid: #3f7a5c;
+  --grid-soft: #cdddc9;
+  --ink: #201e18;
+  --accent: #b1523a;
+  --accent-soft: #dba084;
+  --text: #2c2a22;
+  --dim: #756f5c;
+  --danger: #a8452f;
+
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  /* Noto Sans KR trước — hiện đại, rõ ràng hơn font hệ thống mặc định, hỗ
+     trợ đủ tiếng Hàn lẫn tiếng Việt. Đây là font cho phần UI/nội dung chung
+     — trang giấy 원고지 dùng font riêng do người dùng chọn (data/fonts.ts). */
+  font-family: "Noto Sans KR", "Pretendard", "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+button {
+  font-family: inherit;
+}
+
+textarea::placeholder {
+  color: #9aa79f;
+}
+
+/* ── shared control styles ───────────────────────────────────────────── */
+.wg-btn {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 8px 15px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+.wg-btn:hover:not(:disabled) {
+  border-color: var(--grid);
+}
+.wg-btn:active:not(:disabled) {
+  transform: scale(0.97);
+}
+.wg-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.wg-btn.on {
+  background: var(--grid);
+  border-color: var(--grid);
+  color: #0c1210;
+  font-weight: 600;
+}
+.wg-btn.danger:hover:not(:disabled) {
+  border-color: var(--danger);
+}
+.wg-btn:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.wg-select {
+  background: transparent;
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 8px 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.wg-select:hover {
+  border-color: var(--grid);
+}
+.wg-select:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.wg-select option {
+  background: var(--bg-soft);
+  color: var(--text);
+}
+
+.wg-tab {
+  background: transparent;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 6px 6px 0 0;
+  color: var(--dim);
+  padding: 10px 8px;
+  margin-right: 10px;
+  font-size: 16px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.wg-tab:hover {
+  background: var(--bg-soft);
+  color: var(--text);
+}
+.wg-tab.on {
+  color: var(--text);
+  border-bottom-color: var(--accent);
+  font-weight: 600;
+}
+
+.wg-panel {
+  border: 1px solid var(--line);
+  background: var(--bg-soft);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+}
+
+/* ── modal: bottom-sheet trên mobile, dialog căn giữa trên desktop ─────── */
+.wg-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 14, 15, 0.55);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  z-index: 100;
+}
+.wg-modal-dialog {
+  background: var(--bg-soft);
+  border: 1px solid var(--line);
+  color: var(--text);
+  width: 100%;
+  max-height: 88vh;
+  border-radius: 10px 10px 0 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+@media (min-width: 640px) {
+  .wg-modal-overlay {
+    align-items: center;
+  }
+  .wg-modal-dialog {
+    width: min(640px, calc(100% - 32px));
+    max-height: min(80vh, 720px);
+    border-radius: 8px;
+  }
+}
+
+.wg-caret {
+  animation: wgblink 1.05s steps(1) infinite;
+}
+@keyframes wgblink {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  50.01%,
+  100% {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ── lưới in: kích cỡ ô CỐ ĐỊNH theo mm, tách hẳn khỏi lưới responsive trên
+   màn hình. Đây là cách duy nhất đảm bảo ô luôn vuông khi in — nếu dùng lại
+   lưới px responsive, engine "fit to page" của trình duyệt co giãn bề rộng
+   theo trang giấy nhưng không co bề cao tương ứng, khiến ô bị kéo dài. Lưới
+   in vì vậy render ở PRINT_COLS cố định (khớp REFERENCE_COLS) với ô nhỏ vừa
+   đủ để KHÔNG BAO GIỜ cần trình duyệt co giãn gì thêm. */
+.print-only {
+  display: none;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  /* flex + justify-content: center thay vì block — lưới in hẹp hơn khổ giấy
+     in được (A4 trừ margin) nên nếu chỉ để block, nó nằm sát lề trái thay vì
+     nằm giữa trang. */
+  .print-only {
+    display: flex;
+    justify-content: center;
+  }
+  body {
+    background: #fff;
+  }
+  /* Ép bảng màu về tông in an toàn (mực đen trên nền trắng) bất kể theme
+     sáng/tối đang bật trên màn hình — nếu không, theme tối sẽ in chữ màu
+     gần trắng lên giấy trắng, gần như không đọc được. !important vì các
+     phần tử vẫn tham chiếu qua var(--text)/var(--bg) trong inline style. */
+  :root {
+    --bg: #ffffff !important;
+    --bg-soft: #ffffff !important;
+    --line: #cfcfcf !important;
+    --text: #111111 !important;
+    --dim: #555555 !important;
+    --paper: #fffcf3 !important;
+    --ink: #1b1a15 !important;
+    --grid: #3f7a5c !important;
+    --grid-soft: #a9c2ae !important;
+    --accent: #b1523a !important;
+    --danger: #a8452f !important;
+  }
+  @page {
+    margin: 12mm;
+  }
+}
