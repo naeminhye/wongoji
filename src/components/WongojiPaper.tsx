@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { type WongojiLayout, layoutWongoji, nearestSrc } from "../lib/wongojiLayout";
 import { computeCols, groupSizeForCols } from "../lib/responsiveCols";
 import { gutterMarkAt } from "../lib/gutterMarks";
 import { computeRows } from "../lib/pageRows";
+import type { CellStyle } from "../data/cellStyle";
+import { type ColorId, resolveColor } from "../data/inkColors";
 import CellGlyph from "./CellGlyph";
 
 /** Đường kẻ đậm NGANG cứ mỗi N dòng — khác nhịp với đường kẻ đậm dọc (bó 5
@@ -22,6 +24,13 @@ export interface WongojiPaperProps {
   maxCells?: number;
   /** CSS font-family đầy đủ (đã kèm fallback) — xem data/fonts.ts */
   fontFamily: string;
+  /** "topik" (mặc định, liền dòng) hay "plain" (mỗi dòng tách rời, chừa
+   * khoảng trống ghi chú) — xem data/cellStyle.ts */
+  cellStyle: CellStyle;
+  /** màu đường kẻ — xem data/inkColors.ts */
+  lineColorId: ColorId;
+  /** màu chữ */
+  inkColorId: ColorId;
   /** khoá trang giấy — dùng cho mục 5c (chưa chọn đề ở mode 53/54) */
   disabled?: boolean;
   lockedMessage?: string;
@@ -36,7 +45,20 @@ export interface WongojiPaperProps {
  * khi trình duyệt tự co giãn theo khổ giấy. Vì vậy component này luôn mang
  * class "no-print".
  */
-export default function WongojiPaper({ text, onChange, minCells, maxCells, fontFamily, disabled, lockedMessage, onLayout, className }: WongojiPaperProps) {
+export default function WongojiPaper({
+  text,
+  onChange,
+  minCells,
+  maxCells,
+  fontFamily,
+  cellStyle,
+  lineColorId,
+  inkColorId,
+  disabled,
+  lockedMessage,
+  onLayout,
+  className,
+}: WongojiPaperProps) {
   const [caretSrc, setCaretSrc] = useState(0);
   const [focused, setFocused] = useState(false);
   const [fit, setFit] = useState({ cols: 20, cellSize: 38 });
@@ -49,6 +71,13 @@ export default function WongojiPaper({ text, onChange, minCells, maxCells, fontF
   const cols = fit.cols;
   const cell = fit.cellSize;
   const groupSize = groupSizeForCols(cols);
+
+  const isPlain = cellStyle === "plain";
+  const lineColor = resolveColor(lineColorId);
+  const inkColor = resolveColor(inkColorId);
+  // khoảng trống ghi chú giữa các dòng (chỉ kiểu "Thông thường") — tỉ lệ theo
+  // cỡ ô hiện tại nên vẫn cân đối khi responsive.
+  const rowGap = isPlain ? Math.round(cell * 0.55) : 0;
 
   const L = useMemo(() => layoutWongoji(text, cols), [text, cols]);
 
@@ -100,13 +129,25 @@ export default function WongojiPaper({ text, onChange, minCells, maxCells, fontF
     <div
       ref={wrapRef}
       className={`no-print${className ? ` ${className}` : ""}`}
-      style={{
-        position: "relative",
-        background: "var(--paper)",
-        padding: "18px 12px 18px 16px",
-        borderRadius: "var(--radius-md)",
-        cursor: disabled ? "not-allowed" : "text",
-      }}
+      style={
+        {
+          position: "relative",
+          background: "var(--paper)",
+          padding: "18px 12px 18px 16px",
+          borderRadius: "var(--radius-md)",
+          cursor: disabled ? "not-allowed" : "text",
+          // ghi đè CỤC BỘ (chỉ trong cây con này) 2 biến CSS toàn cục --grid/
+          // --grid-soft/--ink theo màu người dùng chọn — KHÔNG đụng tới biến
+          // gốc ở :root (đang dùng chung cho cả nút bấm, StatusPanel...),
+          // nên đổi màu đường kẻ/chữ trên trang giấy không ảnh hưởng UI khác.
+          // Mọi chỗ bên dưới (và CellGlyph) vẫn tham chiếu var(--grid)/
+          // var(--grid-soft)/var(--ink) y hệt cũ, tự động ăn theo giá trị mới
+          // nhờ cascade — không cần sửa từng chỗ.
+          "--grid": lineColor.bold,
+          "--grid-soft": lineColor.soft,
+          "--ink": inkColor.bold,
+        } as CSSProperties
+      }
       onMouseDown={(e) => {
         if (disabled) return;
         if (e.target === e.currentTarget) focusAt(text.length);
@@ -125,8 +166,12 @@ export default function WongojiPaper({ text, onChange, minCells, maxCells, fontF
             style={{
               width: cols * cell,
               fontFamily,
-              borderLeft: "1px solid var(--grid)",
-              borderRight: "1px solid var(--grid)",
+              // kiểu "Thông thường" (isPlain): mỗi dòng tự bọc viền riêng
+              // (xem bên dưới), nên khung ngoài này KHÔNG cần viền trái/phải
+              // liên tục nữa — nếu giữ sẽ chồng đôi viền, nhìn dày bất
+              // thường ở 2 cạnh.
+              borderLeft: isPlain ? undefined : "1px solid var(--grid)",
+              borderRight: isPlain ? undefined : "1px solid var(--grid)",
               background: "var(--paper)",
               opacity: disabled ? 0.55 : 1,
             }}
@@ -135,15 +180,23 @@ export default function WongojiPaper({ text, onChange, minCells, maxCells, fontF
               // đường kẻ đậm ngang cứ mỗi `ROW_GROUP_SIZE` dòng (4 — khác
               // nhịp với bó cột 5) để dễ đếm dòng hơn. Dòng cuối cùng cũng
               // luôn đậm (đối xứng với viền trên cùng), tạo viền đáy rõ
-              // ràng cho cả trang.
-              const isRowGroupMark = (r + 1) % ROW_GROUP_SIZE === 0 || r === rows - 1;
+              // ràng cho cả trang. Kiểu "Thông thường" không phân biệt
+              // đậm/nhạt — mọi viền đều dùng chung 1 màu (isPlain=true).
+              const isRowGroupMark = !isPlain && ((r + 1) % ROW_GROUP_SIZE === 0 || r === rows - 1);
               return (
                 <div
                   key={r}
                   style={{
                     display: "flex",
-                    borderBottom: `1px solid ${isRowGroupMark ? "var(--grid)" : "var(--grid-soft)"}`,
-                    borderTop: r === 0 ? "1px solid var(--grid)" : undefined,
+                    // kiểu "Thông thường": mỗi dòng là 1 khối tách rời, tự
+                    // bọc đủ 4 cạnh + chừa khoảng trống (marginBottom) bên
+                    // dưới để ghi chú/sửa bài — khác hẳn kiểu Chuẩn TOPIK
+                    // (các dòng liền sát, chỉ có borderBottom phân cách).
+                    marginBottom: isPlain ? rowGap : undefined,
+                    borderBottom: `1px solid ${isPlain || isRowGroupMark ? "var(--grid)" : "var(--grid-soft)"}`,
+                    borderTop: isPlain || r === 0 ? "1px solid var(--grid)" : undefined,
+                    borderLeft: isPlain ? "1px solid var(--grid)" : undefined,
+                    borderRight: isPlain ? "1px solid var(--grid)" : undefined,
                   }}
                 >
                 {Array.from({ length: cols }, (_, c) => {
@@ -153,7 +206,7 @@ export default function WongojiPaper({ text, onChange, minCells, maxCells, fontF
                   // đường kẻ đậm cứ mỗi `groupSize` ô — đúng quy ước 원고지
                   // (thường là bó 10); nếu cols không chia hết cho 10 (VD 25)
                   // thì hạ xuống bó 5 để các bó đều nhau, tránh kiểu 10:10:5 lệch.
-                  const isGroupMark = (c + 1) % groupSize === 0 && c !== cols - 1;
+                  const isGroupMark = !isPlain && (c + 1) % groupSize === 0 && c !== cols - 1;
                   return (
                     <div
                       key={c}
@@ -163,7 +216,7 @@ export default function WongojiPaper({ text, onChange, minCells, maxCells, fontF
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
-                        borderRight: c === cols - 1 ? undefined : `1px solid ${isGroupMark ? "var(--grid)" : "var(--grid-soft)"}`,
+                        borderRight: c === cols - 1 ? undefined : `1px solid ${isPlain || isGroupMark ? "var(--grid)" : "var(--grid-soft)"}`,
                         color: "var(--ink)",
                         lineHeight: 1,
                         width: cell,
@@ -208,7 +261,9 @@ export default function WongojiPaper({ text, onChange, minCells, maxCells, fontF
             (content-box), KHÔNG được box-sizing:border-box (mặc định toàn
             cục ở index.css) — nếu không, border sẽ ăn ngược vào 34px đã khai
             báo thay vì cộng thêm, tổng vẫn chỉ ra 34px thay vì 34+1, lại lệch
-            y như cũ. */}
+            y như cũ. Kiểu "Thông thường" (isPlain) còn có thêm marginBottom
+            (rowGap) và borderTop ở MỌI dòng (không chỉ dòng đầu) — gutter
+            phải mượn đúng y hệt để 2 cột luôn cao bằng nhau từng dòng một. */}
         <div style={{ marginLeft: 6, flexShrink: 0, display: "flex", flexDirection: "column" }}>
           {Array.from({ length: rows }, (_, r) => {
             const mark = gutterMarkAt(r, cols);
@@ -221,8 +276,9 @@ export default function WongojiPaper({ text, onChange, minCells, maxCells, fontF
                   position: "relative",
                   fontSize: 10,
                   color: "var(--dim)",
+                  marginBottom: isPlain ? rowGap : undefined,
                   borderBottom: "1px solid transparent",
-                  borderTop: r === 0 ? "1px solid transparent" : undefined,
+                  borderTop: isPlain || r === 0 ? "1px solid transparent" : undefined,
                 }}
               >
                 {mark !== null && (

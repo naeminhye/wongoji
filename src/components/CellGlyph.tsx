@@ -30,7 +30,11 @@ export default function CellGlyph({ cell, fontSize, sideFontSize = "0.9em" }: Ce
         {cell?.t}
       </span>
       {cell?.side && (
-        <span style={{ position: "absolute", right: "-0.62em", bottom: "0.06em", fontSize: sideFontSize, color: "var(--ink)" }}>{cell.side}</span>
+        // không đặt màu riêng — kế thừa `color` từ ô cha (WongojiPaper dùng
+        // var(--ink) đã ghi đè cục bộ, PrintPaper đặt color trực tiếp trên
+        // khung ngoài), để luôn khớp đúng màu chữ người dùng chọn ở cả 2 nơi
+        // thay vì tự tra var(--ink) toàn cục (có thể lệch màu khi in).
+        <span style={{ position: "absolute", right: "-0.62em", bottom: "0.06em", fontSize: sideFontSize }}>{cell.side}</span>
       )}
     </>
   );

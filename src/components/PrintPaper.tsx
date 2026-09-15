@@ -2,6 +2,8 @@ import { layoutWongoji } from "../lib/wongojiLayout";
 import { groupSizeForCols } from "../lib/responsiveCols";
 import { gutterMarkAt } from "../lib/gutterMarks";
 import { computeRows } from "../lib/pageRows";
+import type { CellStyle } from "../data/cellStyle";
+import { type ColorId, resolveColor } from "../data/inkColors";
 import CellGlyph from "./CellGlyph";
 
 /** Số ô/dòng khi in — cố định 25 (khớp mốc tối đa của lưới responsive trên
@@ -36,6 +38,13 @@ export interface PrintPaperProps {
   /** trần tuyệt đối số ô của cả trang (câu 53/54: 300/700) — bỏ trống = Viết
    * tự do, không giới hạn. */
   maxCells?: number;
+  /** "topik" (mặc định, liền dòng) hay "plain" (mỗi dòng tách rời, chừa
+   * khoảng trống ghi chú) — xem data/cellStyle.ts, giống hệt WongojiPaper. */
+  cellStyle: CellStyle;
+  /** màu đường kẻ — xem data/inkColors.ts */
+  lineColorId: ColorId;
+  /** màu chữ */
+  inkColorId: ColorId;
 }
 
 /**
@@ -52,9 +61,16 @@ export interface PrintPaperProps {
  * dòng trống thừa không cần thiết, có khi tràn sang cả trang in thứ 2 gần
  * như trống dù nội dung đã đủ vừa 1 trang.
  */
-export default function PrintPaper({ text, fontFamily, minCells, maxCells }: PrintPaperProps) {
+export default function PrintPaper({ text, fontFamily, minCells, maxCells, cellStyle, lineColorId, inkColorId }: PrintPaperProps) {
   const L = layoutWongoji(text, PRINT_COLS);
   const rows = computeRows({ cols: PRINT_COLS, endPos: L.endPos, minCells, maxCells });
+
+  const isPlain = cellStyle === "plain";
+  const lineColor = resolveColor(lineColorId);
+  const inkColor = resolveColor(inkColorId);
+  // khoảng trống ghi chú giữa các dòng (chỉ kiểu "Thông thường") — tỉ lệ theo
+  // PRINT_CELL_MM, cùng công thức với WongojiPaper (đổi đơn vị px→mm).
+  const rowGapMm = isPlain ? PRINT_CELL_MM * 0.55 : 0;
 
   return (
     <div className="print-only">
@@ -62,31 +78,37 @@ export default function PrintPaper({ text, fontFamily, minCells, maxCells }: Pri
         <div
           style={{
             fontFamily,
-            borderLeft: "0.3mm solid #3f7a5c",
-            borderRight: "0.3mm solid #3f7a5c",
+            // kiểu "Thông thường": mỗi dòng tự bọc viền riêng (xem bên
+            // dưới), khung ngoài này không cần viền trái/phải liên tục nữa.
+            borderLeft: isPlain ? undefined : `0.3mm solid ${lineColor.bold}`,
+            borderRight: isPlain ? undefined : `0.3mm solid ${lineColor.bold}`,
             background: "#fffcf3",
-            color: "#1b1a15",
+            color: inkColor.bold,
           }}
         >
           {Array.from({ length: rows }, (_, r) => {
             // đường kẻ đậm ngang cứ mỗi PRINT_ROW_GROUP_SIZE dòng (4 — khác
             // nhịp với bó cột 5, giống lưới màn hình). Dòng cuối cùng cũng
-            // luôn đậm, đối xứng với viền trên cùng của trang.
-            const isRowGroupMark = (r + 1) % PRINT_ROW_GROUP_SIZE === 0 || r === rows - 1;
+            // luôn đậm, đối xứng với viền trên cùng của trang. Kiểu "Thông
+            // thường" không phân biệt đậm/nhạt — mọi viền dùng chung 1 màu.
+            const isRowGroupMark = !isPlain && ((r + 1) % PRINT_ROW_GROUP_SIZE === 0 || r === rows - 1);
             return (
               <div
                 key={r}
                 style={{
                   display: "flex",
-                  borderBottom: `0.2mm solid ${isRowGroupMark ? "#3f7a5c" : "#a9c2ae"}`,
-                  borderTop: r === 0 ? "0.3mm solid #3f7a5c" : undefined,
+                  marginBottom: isPlain ? `${rowGapMm}mm` : undefined,
+                  borderBottom: `0.2mm solid ${isPlain || isRowGroupMark ? lineColor.bold : lineColor.soft}`,
+                  borderTop: isPlain || r === 0 ? `0.3mm solid ${lineColor.bold}` : undefined,
+                  borderLeft: isPlain ? `0.3mm solid ${lineColor.bold}` : undefined,
+                  borderRight: isPlain ? `0.3mm solid ${lineColor.bold}` : undefined,
                 }}
               >
               {Array.from({ length: PRINT_COLS }, (_, c) => {
                 const p = r * PRINT_COLS + c;
                 const cl = L.cells.get(p);
                 // đường kẻ đậm cứ mỗi PRINT_GROUP_SIZE ô — giống lưới màn hình
-                const isGroupMark = (c + 1) % PRINT_GROUP_SIZE === 0 && c !== PRINT_COLS - 1;
+                const isGroupMark = !isPlain && (c + 1) % PRINT_GROUP_SIZE === 0 && c !== PRINT_COLS - 1;
                 return (
                   <div
                     key={c}
@@ -96,7 +118,7 @@ export default function PrintPaper({ text, fontFamily, minCells, maxCells }: Pri
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      borderRight: c === PRINT_COLS - 1 ? undefined : `0.2mm solid ${isGroupMark ? "#3f7a5c" : "#a9c2ae"}`,
+                      borderRight: c === PRINT_COLS - 1 ? undefined : `0.2mm solid ${isPlain || isGroupMark ? lineColor.bold : lineColor.soft}`,
                       width: `${PRINT_CELL_MM}mm`,
                       height: `${PRINT_CELL_MM}mm`,
                       lineHeight: 1,
@@ -124,7 +146,9 @@ export default function PrintPaper({ text, fontFamily, minCells, maxCells }: Pri
             phải content-box (không dùng box-sizing:border-box mặc định toàn
             cục ở index.css) để border cộng thêm giống vậy — nếu không, border
             sẽ ăn ngược vào PRINT_CELL_MM đã khai báo, tổng vẫn ra đúng
-            PRINT_CELL_MM thay vì +0.2/0.3mm, lại lệch y như cũ. */}
+            PRINT_CELL_MM thay vì +0.2/0.3mm, lại lệch y như cũ. Kiểu "Thông
+            thường" (isPlain) còn có thêm marginBottom (rowGapMm) và borderTop
+            ở MỌI dòng — gutter phải mượn đúng y hệt để không lệch dần. */}
         <div style={{ marginLeft: "1.5mm", display: "flex", flexDirection: "column" }}>
           {Array.from({ length: rows }, (_, r) => {
             const mark = gutterMarkAt(r, PRINT_COLS);
@@ -137,8 +161,9 @@ export default function PrintPaper({ text, fontFamily, minCells, maxCells }: Pri
                   position: "relative",
                   fontSize: "2.6mm",
                   color: "#756f5c",
+                  marginBottom: isPlain ? `${rowGapMm}mm` : undefined,
                   borderBottom: "0.2mm solid transparent",
-                  borderTop: r === 0 ? "0.3mm solid transparent" : undefined,
+                  borderTop: isPlain || r === 0 ? "0.3mm solid transparent" : undefined,
                 }}
               >
                 {mark !== null && (

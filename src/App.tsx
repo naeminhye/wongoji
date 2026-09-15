@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { MODES, SAMPLE_PROMPTS, type WongojiPrompt } from "./data/prompts";
 import { DEFAULT_FONT_ID, FONT_OPTIONS, resolveFontFamily } from "./data/fonts";
+import { CELL_STYLE_OPTIONS, DEFAULT_CELL_STYLE, type CellStyle } from "./data/cellStyle";
+import { COLOR_OPTIONS, DEFAULT_INK_COLOR, DEFAULT_LINE_COLOR, type ColorId } from "./data/inkColors";
 import { countWongoji, type WongojiLayout } from "./lib/wongojiLayout";
 import WongojiPaper from "./components/WongojiPaper";
 import PrintPaper from "./components/PrintPaper";
@@ -40,6 +42,9 @@ export default function App() {
 
   const [theme, setTheme] = useState<Theme>(resolveInitialTheme);
   const [fontId, setFontId] = useState<string>(DEFAULT_FONT_ID);
+  const [cellStyle, setCellStyle] = useState<CellStyle>(DEFAULT_CELL_STYLE);
+  const [lineColorId, setLineColorId] = useState<ColorId>(DEFAULT_LINE_COLOR);
+  const [inkColorId, setInkColorId] = useState<ColorId>(DEFAULT_INK_COLOR);
   const [showRaw, setShowRaw] = useState(false);
   const [printMode, setPrintMode] = useState<PrintMode>("content");
   const [lastLayout, setLastLayout] = useState<WongojiLayout | null>(null);
@@ -184,6 +189,33 @@ export default function App() {
                 </option>
               ))}
             </select>
+            <select
+              className="wg-select"
+              value={cellStyle}
+              onChange={(e) => setCellStyle(e.target.value as CellStyle)}
+              aria-label="Chọn kiểu ô"
+              title={CELL_STYLE_OPTIONS.find((o) => o.id === cellStyle)?.desc}
+            >
+              {CELL_STYLE_OPTIONS.map((o) => (
+                <option key={o.id} value={o.id}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+            <select className="wg-select" value={lineColorId} onChange={(e) => setLineColorId(e.target.value as ColorId)} aria-label="Chọn màu đường kẻ">
+              {COLOR_OPTIONS.map((c) => (
+                <option key={c.id} value={c.id}>
+                  Kẻ: {c.label}
+                </option>
+              ))}
+            </select>
+            <select className="wg-select" value={inkColorId} onChange={(e) => setInkColorId(e.target.value as ColorId)} aria-label="Chọn màu chữ">
+              {COLOR_OPTIONS.map((c) => (
+                <option key={c.id} value={c.id}>
+                  Chữ: {c.label}
+                </option>
+              ))}
+            </select>
             <button className={`wg-btn ${showRaw ? "on" : ""}`} onClick={() => setShowRaw((v) => !v)}>
               Ô nhập thô
             </button>
@@ -234,6 +266,9 @@ export default function App() {
               minCells={cfg.minCells}
               maxCells={cfg.maxCells}
               fontFamily={resolveFontFamily(fontId)}
+              cellStyle={cellStyle}
+              lineColorId={lineColorId}
+              inkColorId={inkColorId}
               disabled={locked}
               lockedMessage={
                 cfg.requiresPrompt && !activePrompt
@@ -319,6 +354,9 @@ export default function App() {
         fontFamily={resolveFontFamily(fontId)}
         minCells={cfg.minCells}
         maxCells={cfg.maxCells}
+        cellStyle={cellStyle}
+        lineColorId={lineColorId}
+        inkColorId={inkColorId}
       />
 
       <RulesModal open={rulesOpen} onClose={() => setRulesOpen(false)} />
