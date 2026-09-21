@@ -7,7 +7,7 @@ export interface PromptPanelProps {
   onActivate: (prompt: WongojiPrompt) => void;
 }
 
-type Tab = "sample" | "text" | "image";
+type Tab = "input" | "sample";
 
 function readFileAsDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -20,41 +20,40 @@ function readFileAsDataUrl(file: File): Promise<string> {
 
 /**
  * Panel chọn/nhập đề bài (mục 5 & 5a):
- *  - Đề mẫu: carousel qua lại giữa các đề mẫu kèm bản dịch VN.
- *  - Dán văn bản: paste/gõ trực tiếp 원문 vào ô nhập.
- *  - Hình ảnh: dán (Ctrl/Cmd+V) hoặc chọn NHIỀU ảnh đề bài cùng lúc — hiển thị
- *    NGUYÊN ẢNH (không chạy OCR) cả khi viết lẫn khi in, người dùng đọc đề
- *    trực tiếp từ ảnh thay vì phải gõ lại.
+ *  - Dán đề bài (mặc định khi vào): MỘT chỗ vừa dán/gõ văn bản (원문) vừa
+ *    upload/kéo-thả/dán nhiều ảnh CÙNG LÚC — không tách 2 tab riêng như
+ *    trước, vì đề thật có thể vừa có chữ dẫn vừa có ảnh minh hoạ đính kèm.
+ *    Hiển thị/lưu theo thứ tự CHỮ TRƯỚC, ẢNH SAU (khớp ActivePromptCard).
+ *  - Kho đề mẫu: chọn qua dropdown thay vì bấm mũi tên qua từng đề — tiện khi
+ *    thư viện có hàng chục đề.
  *
- * Sau khi bấm "Dùng đề này để viết" ở tab Dán văn bản/Hình ảnh, phần nhập
- * liệu được ẩn đi (khoá lại) để tránh sửa nhầm giữa lúc đang viết — người
- * dùng bấm "Đặt lại" mới mở lại form nhập để soạn đề khác.
+ * Sau khi bấm "Dùng đề này để viết" ở tab Dán đề bài, phần nhập liệu bị ẩn đi
+ * (khoá lại) để tránh sửa nhầm giữa lúc đang viết — bấm "Đặt lại" mới mở lại
+ * form nhập để soạn đề khác.
  */
 export default function PromptPanel({ samples, active, onActivate }: PromptPanelProps) {
-  const [tab, setTab] = useState<Tab>("sample");
+  const [tab, setTab] = useState<Tab>("input");
+
+  const [inputTitle, setInputTitle] = useState("");
+  const [inputText, setInputText] = useState("");
+  const [inputVn, setInputVn] = useState("");
+  const [inputImageDataUrls, setInputImageDataUrls] = useState<string[]>([]);
+  const [inputDragOver, setInputDragOver] = useState(false);
+  const [inputLocked, setInputLocked] = useState(false);
+
   const [sampleIdx, setSampleIdx] = useState(0);
-
-  const [customText, setCustomText] = useState("");
-  const [customTextTitle, setCustomTextTitle] = useState("");
-  const [customTextVn, setCustomTextVn] = useState("");
-  const [textLocked, setTextLocked] = useState(false);
-
-  const [imageDataUrls, setImageDataUrls] = useState<string[]>([]);
-  const [imageTitle, setImageTitle] = useState("");
-  const [imageVn, setImageVn] = useState("");
-  const [imageDragOver, setImageDragOver] = useState(false);
-  const [imageLocked, setImageLocked] = useState(false);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const sample = samples.length > 0 ? samples[sampleIdx % samples.length] : null;
+  const canActivateInput = inputText.trim().length > 0 || inputImageDataUrls.length > 0;
 
   const handleFiles = async (files: FileList | null) => {
     if (!files) return;
     const imgFiles = Array.from(files).filter((f) => f.type.startsWith("image/"));
     if (imgFiles.length === 0) return;
     const dataUrls = await Promise.all(imgFiles.map(readFileAsDataUrl));
-    setImageDataUrls((prev) => [...prev, ...dataUrls]);
+    setInputImageDataUrls((prev) => [...prev, ...dataUrls]);
   };
 
   const handlePaste = async (e: ClipboardEvent) => {
@@ -69,21 +68,15 @@ export default function PromptPanel({ samples, active, onActivate }: PromptPanel
     }
     if (files.length === 0) return;
     const dataUrls = await Promise.all(files.map(readFileAsDataUrl));
-    setImageDataUrls((prev) => [...prev, ...dataUrls]);
+    setInputImageDataUrls((prev) => [...prev, ...dataUrls]);
   };
 
-  const resetTextTab = () => {
-    setCustomText("");
-    setCustomTextTitle("");
-    setCustomTextVn("");
-    setTextLocked(false);
-  };
-
-  const resetImageTab = () => {
-    setImageDataUrls([]);
-    setImageTitle("");
-    setImageVn("");
-    setImageLocked(false);
+  const resetInputTab = () => {
+    setInputTitle("");
+    setInputText("");
+    setInputVn("");
+    setInputImageDataUrls([]);
+    setInputLocked(false);
   };
 
   return (
@@ -91,9 +84,8 @@ export default function PromptPanel({ samples, active, onActivate }: PromptPanel
       <div style={{ display: "flex", gap: 4, marginBottom: 12, borderBottom: "1px solid var(--line)" }}>
         {(
           [
-            ["sample", "Đề mẫu"],
-            ["text", "Dán văn bản"],
-            ["image", "Hình ảnh"],
+            ["input", "Dán đề bài"],
+            ["sample", "Kho đề mẫu"],
           ] as [Tab, string][]
         ).map(([k, label]) => (
           <button key={k} className={`wg-tab ${tab === k ? "on" : ""}`} style={{ fontSize: 14, marginRight: 14, padding: "8px 2px" }} onClick={() => setTab(k)}>
@@ -102,23 +94,141 @@ export default function PromptPanel({ samples, active, onActivate }: PromptPanel
         ))}
       </div>
 
+      {tab === "input" &&
+        (inputLocked ? (
+          <div>
+            <div style={{ border: "1px solid var(--line)", borderRadius: "var(--radius-md)", padding: 12 }}>
+              <p style={{ margin: 0, fontSize: 13.5, color: "var(--dim)" }}>✓ Đã dùng đề này để viết.</p>
+              {inputTitle.trim() && <p style={{ margin: "8px 0 0", fontSize: 14, fontWeight: 600 }}>{inputTitle.trim()}</p>}
+              {inputText.trim() && (
+                <pre style={{ margin: "8px 0 0", whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.6, fontFamily: "inherit", color: "var(--text)" }}>
+                  {inputText}
+                </pre>
+              )}
+              {inputImageDataUrls.length > 0 && (
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: inputText.trim() ? 8 : 0 }}>
+                  {inputImageDataUrls.map((src, i) => (
+                    <img key={i} src={src} alt={`Đề bài ${i + 1}`} style={{ maxWidth: 100, maxHeight: 100, borderRadius: "var(--radius-sm)", objectFit: "cover" }} />
+                  ))}
+                </div>
+              )}
+            </div>
+            <button className="wg-btn" style={{ marginTop: 10, width: "100%" }} onClick={resetInputTab}>
+              Đặt lại
+            </button>
+          </div>
+        ) : (
+          <div>
+            <input value={inputTitle} onChange={(e) => setInputTitle(e.target.value)} placeholder="Tiêu đề (không bắt buộc)" style={inputStyle} />
+            <textarea
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              placeholder="Dán hoặc gõ đề bài (원문) vào đây — có thể để trống nếu chỉ dùng ảnh bên dưới."
+              style={{ ...inputStyle, minHeight: 110, marginTop: 8, resize: "vertical", fontFamily: "inherit", lineHeight: 1.6 }}
+            />
+
+            <div
+              tabIndex={0}
+              onPaste={handlePaste}
+              onDrop={(e) => {
+                e.preventDefault();
+                setInputDragOver(false);
+                void handleFiles(e.dataTransfer.files);
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+                setInputDragOver(true);
+              }}
+              onDragLeave={() => setInputDragOver(false)}
+              onClick={() => fileInputRef.current?.click()}
+              style={{
+                marginTop: 8,
+                border: `1px dashed ${inputDragOver ? "var(--accent)" : "var(--line)"}`,
+                borderRadius: "var(--radius-md)",
+                padding: 16,
+                textAlign: "center",
+                cursor: "pointer",
+                fontSize: 13.5,
+                color: "var(--dim)",
+              }}
+            >
+              {inputImageDataUrls.length > 0 ? (
+                <>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
+                    {inputImageDataUrls.map((src, i) => (
+                      <div key={i} style={{ position: "relative" }}>
+                        <img src={src} alt={`Đề bài ${i + 1}`} style={{ maxWidth: 140, maxHeight: 140, borderRadius: "var(--radius-sm)", display: "block" }} />
+                        <button
+                          type="button"
+                          aria-label={`Xoá ảnh ${i + 1}`}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setInputImageDataUrls((prev) => prev.filter((_, idx) => idx !== i));
+                          }}
+                          style={removeBtnStyle}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <p style={{ margin: "10px 0 0" }}>Nhấn · kéo-thả · hoặc dán (Ctrl/Cmd+V) để thêm ảnh khác</p>
+                </>
+              ) : (
+                <>Nhấn để chọn ảnh (chọn được nhiều ảnh) · Kéo-thả ảnh vào đây · Hoặc bấm vào đây rồi dán bằng Ctrl/Cmd+V — không bắt buộc nếu đã có văn bản ở trên</>
+              )}
+              <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={(e) => void handleFiles(e.target.files)} />
+            </div>
+
+            <textarea
+              value={inputVn}
+              onChange={(e) => setInputVn(e.target.value)}
+              placeholder="Ghi chú dịch (tự nhập, không tự động dịch)"
+              style={{ ...inputStyle, minHeight: 56, marginTop: 8, resize: "vertical" }}
+            />
+
+            <button
+              className="wg-btn on"
+              style={{ marginTop: 10, width: "100%" }}
+              disabled={!canActivateInput}
+              onClick={() => {
+                const hasText = inputText.trim().length > 0;
+                const hasImages = inputImageDataUrls.length > 0;
+                onActivate({
+                  id: `custom-${Date.now()}`,
+                  source: hasText && hasImages ? "mixed" : hasImages ? "image" : "text",
+                  title: inputTitle.trim() || "Đề tự nhập",
+                  body: inputText.trim(),
+                  vn: inputVn.trim(),
+                  imageDataUrls: hasImages ? inputImageDataUrls : undefined,
+                });
+                setInputLocked(true);
+              }}
+            >
+              Dùng đề này để viết
+            </button>
+          </div>
+        ))}
+
       {tab === "sample" &&
         (sample ? (
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
-              <span style={{ fontSize: 13.5, color: "var(--dim)" }}>{sample.title}</span>
-              <div style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
-                <button className="wg-btn" style={{ padding: "2px 9px" }} onClick={() => setSampleIdx((i) => (i - 1 + samples.length) % samples.length)}>
-                  ←
-                </button>
-                <span style={{ fontSize: 12, color: "var(--dim)" }}>
-                  {(sampleIdx % samples.length) + 1}/{samples.length}
-                </span>
-                <button className="wg-btn" style={{ padding: "2px 9px" }} onClick={() => setSampleIdx((i) => (i + 1) % samples.length)}>
-                  →
-                </button>
-              </div>
-            </div>
+            <label htmlFor="wg-sample-select" style={{ display: "block", fontSize: 12.5, color: "var(--dim)", marginBottom: 4 }}>
+              Chọn đề mẫu ({samples.length} đề)
+            </label>
+            <select
+              id="wg-sample-select"
+              className="wg-select"
+              style={{ width: "100%", marginBottom: 10 }}
+              value={sampleIdx % samples.length}
+              onChange={(e) => setSampleIdx(Number(e.target.value))}
+            >
+              {samples.map((s, i) => (
+                <option key={s.id} value={i}>
+                  {s.title}
+                </option>
+              ))}
+            </select>
             <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontSize: 15, lineHeight: 1.7, fontFamily: "inherit", color: "var(--text)" }}>{sample.body}</pre>
             <p style={{ margin: "10px 0 0", fontSize: 13.5, color: "var(--dim)", borderTop: "1px solid var(--line)", paddingTop: 8 }}>{sample.vn}</p>
             <button
@@ -131,162 +241,6 @@ export default function PromptPanel({ samples, active, onActivate }: PromptPanel
           </div>
         ) : (
           <p style={{ fontSize: 14, color: "var(--dim)" }}>Chế độ này không có đề mẫu.</p>
-        ))}
-
-      {tab === "text" &&
-        (textLocked ? (
-          <div>
-            <div style={{ border: "1px solid var(--line)", borderRadius: "var(--radius-md)", padding: 12 }}>
-              <p style={{ margin: 0, fontSize: 13.5, color: "var(--dim)" }}>✓ Đã dùng đề văn bản này để viết.</p>
-              {customTextTitle.trim() && <p style={{ margin: "8px 0 0", fontSize: 14, fontWeight: 600 }}>{customTextTitle.trim()}</p>}
-              <pre style={{ margin: "8px 0 0", whiteSpace: "pre-wrap", fontSize: 14, lineHeight: 1.6, fontFamily: "inherit", color: "var(--text)" }}>
-                {customText}
-              </pre>
-            </div>
-            <button className="wg-btn" style={{ marginTop: 10, width: "100%" }} onClick={resetTextTab}>
-              Đặt lại
-            </button>
-          </div>
-        ) : (
-          <div>
-            <input value={customTextTitle} onChange={(e) => setCustomTextTitle(e.target.value)} placeholder="Tiêu đề (không bắt buộc)" style={inputStyle} />
-            <textarea
-              value={customText}
-              onChange={(e) => setCustomText(e.target.value)}
-              placeholder="Dán hoặc gõ đề bài (원문) vào đây."
-              style={{ ...inputStyle, minHeight: 110, marginTop: 8, resize: "vertical", fontFamily: "inherit", lineHeight: 1.6 }}
-            />
-            <textarea
-              value={customTextVn}
-              onChange={(e) => setCustomTextVn(e.target.value)}
-              placeholder="Ghi chú dịch (tự nhập, không tự động dịch)"
-              style={{ ...inputStyle, minHeight: 56, marginTop: 8, resize: "vertical" }}
-            />
-            <button
-              className="wg-btn on"
-              style={{ marginTop: 10, width: "100%" }}
-              disabled={!customText.trim()}
-              onClick={() => {
-                onActivate({
-                  id: `custom-text-${Date.now()}`,
-                  source: "text",
-                  title: customTextTitle.trim() || "Đề tự nhập",
-                  body: customText.trim(),
-                  vn: customTextVn.trim(),
-                });
-                setTextLocked(true);
-              }}
-            >
-              Dùng đề này để viết
-            </button>
-          </div>
-        ))}
-
-      {tab === "image" &&
-        (imageLocked ? (
-          <div>
-            <div style={{ border: "1px solid var(--line)", borderRadius: "var(--radius-md)", padding: 12 }}>
-              <p style={{ margin: 0, fontSize: 13.5, color: "var(--dim)" }}>
-                ✓ Đã dùng {imageDataUrls.length} ảnh này để viết.
-              </p>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-                {imageDataUrls.map((src, i) => (
-                  <img key={i} src={src} alt={`Đề bài ${i + 1}`} style={{ maxWidth: 100, maxHeight: 100, borderRadius: "var(--radius-sm)", objectFit: "cover" }} />
-                ))}
-              </div>
-            </div>
-            <button className="wg-btn" style={{ marginTop: 10, width: "100%" }} onClick={resetImageTab}>
-              Đặt lại
-            </button>
-          </div>
-        ) : (
-          <div>
-            <div
-              tabIndex={0}
-              onPaste={handlePaste}
-              onDrop={(e) => {
-                e.preventDefault();
-                setImageDragOver(false);
-                void handleFiles(e.dataTransfer.files);
-              }}
-              onDragOver={(e) => {
-                e.preventDefault();
-                setImageDragOver(true);
-              }}
-              onDragLeave={() => setImageDragOver(false)}
-              onClick={() => fileInputRef.current?.click()}
-              style={{
-                border: `1px dashed ${imageDragOver ? "var(--accent)" : "var(--line)"}`,
-                borderRadius: "var(--radius-md)",
-                padding: 16,
-                textAlign: "center",
-                cursor: "pointer",
-                fontSize: 13.5,
-                color: "var(--dim)",
-              }}
-            >
-              {imageDataUrls.length > 0 ? (
-                <>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8, justifyContent: "center" }}>
-                    {imageDataUrls.map((src, i) => (
-                      <div key={i} style={{ position: "relative" }}>
-                        <img src={src} alt={`Đề bài ${i + 1}`} style={{ maxWidth: 140, maxHeight: 140, borderRadius: "var(--radius-sm)", display: "block" }} />
-                        <button
-                          type="button"
-                          aria-label={`Xoá ảnh ${i + 1}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setImageDataUrls((prev) => prev.filter((_, idx) => idx !== i));
-                          }}
-                          style={removeBtnStyle}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                  <p style={{ margin: "10px 0 0" }}>Nhấn · kéo-thả · hoặc dán (Ctrl/Cmd+V) để thêm ảnh khác</p>
-                </>
-              ) : (
-                <>Nhấn để chọn tệp (chọn được nhiều ảnh) · Kéo-thả ảnh vào đây · Hoặc bấm vào đây rồi dán ảnh bằng Ctrl/Cmd+V</>
-              )}
-              <input ref={fileInputRef} type="file" accept="image/*" multiple hidden onChange={(e) => void handleFiles(e.target.files)} />
-            </div>
-
-            {imageDataUrls.length > 0 && (
-              <>
-                <input value={imageTitle} onChange={(e) => setImageTitle(e.target.value)} placeholder="Tiêu đề (không bắt buộc)" style={{ ...inputStyle, marginTop: 10 }} />
-                <textarea
-                  value={imageVn}
-                  onChange={(e) => setImageVn(e.target.value)}
-                  placeholder="Ghi chú dịch (tự nhập, không tự động dịch)"
-                  style={{ ...inputStyle, minHeight: 56, marginTop: 8, resize: "vertical" }}
-                />
-                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-                  <button
-                    className="wg-btn on"
-                    style={{ flex: 1 }}
-                    onClick={() => {
-                      onActivate({
-                        id: `custom-image-${Date.now()}`,
-                        source: "image",
-                        title: imageTitle.trim() || "Đề bài (ảnh)",
-                        body: "",
-                        vn: imageVn.trim(),
-                        imageDataUrls,
-                      });
-                      setImageLocked(true);
-                    }}
-                  >
-                    Dùng đề này để viết
-                  </button>
-                  <button className="wg-btn" onClick={() => setImageDataUrls([])}>
-                    Xoá hết ảnh
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
         ))}
     </section>
   );

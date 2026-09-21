@@ -18,6 +18,7 @@ import RulesModal from "./components/RulesModal";
 import ConfirmDialog from "./components/ConfirmDialog";
 import PromptPanel from "./components/PromptPanel";
 import DraftPad from "./components/DraftPad";
+import PhraseBankPanel from "./components/PhraseBankPanel";
 
 type Mode = "q53" | "q54" | "free";
 type Theme = "light" | "dark";
@@ -258,6 +259,21 @@ export default function App() {
             {/* Ẩn nháp ở ⏱ Chế độ thi — mô phỏng điều kiện thi thật, không có trợ giúp */}
             {!isTest && (
               <DraftPad mode={mode} value={draftByMode[mode]} onChange={(value) => setDraftByMode((prev) => ({ ...prev, [mode]: value }))} />
+            )}
+
+            {/* Ngân hàng cụm từ theo dạng đề — chỉ có ở câu 53/54 (mỗi câu một
+                bộ cụm từ khác nhau, xem data/phraseBank.ts), ẩn cùng lúc với
+                Nháp ở ⏱ Chế độ thi vì cũng là trợ giúp lúc soạn bài. */}
+            {!isTest && mode !== "free" && (
+              <PhraseBankPanel
+                mode={mode}
+                onInsert={(kr) =>
+                  setDraftByMode((prev) => {
+                    const current = prev[mode];
+                    return { ...prev, [mode]: current.trim().length > 0 ? `${current}\n${kr}` : kr };
+                  })
+                }
+              />
             )}
 
             <WongojiPaper

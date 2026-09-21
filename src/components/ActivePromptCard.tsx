@@ -17,8 +17,15 @@ export default function ActivePromptCard({ prompt }: ActivePromptCardProps) {
     <section className="wg-panel" style={{ background: "var(--bg-soft)" }}>
       {prompt.title && <h3 style={{ margin: "0 0 8px", fontSize: 14, fontWeight: 600, color: "var(--dim)" }}>{prompt.title}</h3>}
 
-      {prompt.imageDataUrls && prompt.imageDataUrls.length > 0 ? (
-        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      {/* Văn bản luôn đứng trước, ảnh đứng sau — đề có thể có cả hai cùng lúc */}
+      {prompt.body && (
+        <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontSize: 15, lineHeight: 1.7, fontFamily: "inherit", color: "var(--text)" }}>
+          {prompt.body}
+        </pre>
+      )}
+
+      {prompt.imageDataUrls && prompt.imageDataUrls.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: prompt.body ? 10 : 0 }}>
           {prompt.imageDataUrls.map((src, i) => (
             <img
               key={i}
@@ -28,12 +35,6 @@ export default function ActivePromptCard({ prompt }: ActivePromptCardProps) {
             />
           ))}
         </div>
-      ) : (
-        prompt.body && (
-          <pre style={{ margin: 0, whiteSpace: "pre-wrap", fontSize: 15, lineHeight: 1.7, fontFamily: "inherit", color: "var(--text)" }}>
-            {prompt.body}
-          </pre>
-        )
       )}
 
       {prompt.vn && (
