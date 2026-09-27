@@ -17,6 +17,19 @@ export const WONGOJI_RULES: WongojiRule[] = [
     detail: "2 ký tự / ô, ghép từ trái sang phải (vd: 20 → 1 ô; 365 → 36 + 5).",
   },
   {
+    title: "소수점 · 자릿점 — Dấu . và , trong số",
+    detail:
+      "Được tính như 1 ký tự của số, ghép cặp cùng chữ số: 25.5 → 25|.5 ; 1.2 → 1.|2 ; 100.3 → 10|0.|3 ; 51,732,586 → 51|,7|32|,5|86. Không bắt buộc dấu phẩy mỗi 3 chữ số — nên viết theo đơn vị 만 (vd: 백만, 5173만).",
+  },
+  {
+    title: "단위 — Đơn vị đo",
+    detail: "Viết gộp trong 1 ô: 1|kg|은 ; 10|00|mℓ ; 1|MHz|는 ; 백|만|Hz.",
+  },
+  {
+    title: "분수 — Phân số",
+    detail: "Viết ½ trong 1 ô, hoặc viết bằng chữ: 2|분|의| |1.",
+  },
+  {
     title: "로마자 대문자 — Chữ Latin HOA",
     detail: "1 ký tự / ô.",
   },
@@ -42,11 +55,15 @@ export const WONGOJI_RULES: WongojiRule[] = [
   },
   {
     title: "말줄임표 — ……",
-    detail: "Chiếm 2 ô; nếu có dấu . theo ngay sau, dấu chấm nhập chung vào ô cuối của ……",
+    detail: "Chiếm 2 ô (mỗi ô 3 chấm); dấu . kết câu theo sau viết riêng ở ô kế tiếp: 에|…|…|.",
+  },
+  {
+    title: "줄표 — ——",
+    detail: "Chiếm 2 ô: 가|—|—|아|니.",
   },
   {
     title: "따옴표 — Ngoặc kép “ ” và ngoặc đơn ‘ ’",
-    detail: "Viết lệch về góc ô; nếu ngoặc đóng đi liền sau . hoặc , thì dùng chung 1 ô (vd: .”).",
+    detail: "Mỗi dấu 1 ô, viết lệch về góc ô; ngoặc đóng sau . vẫn ở ô riêng: 라|.|”.",
   },
   {
     title: "줄 끝의 여는 괄호 — Ngoặc mở cuối dòng",

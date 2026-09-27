@@ -69,6 +69,47 @@ describe("layoutWongoji — quy tắc cơ bản", () => {
   });
 });
 
+describe("layoutWongoji — số thập phân, dấu phẩy hàng nghìn, đơn vị, phân số", () => {
+  const cellsOf = (src: string, from: number, n: number) => {
+    const L = layoutWongoji(src, 20);
+    return Array.from({ length: n }, (_, k) => textOf(L.cells.get(from + k)));
+  };
+
+  it("dấu . trong số thập phân ghép cặp như một chữ số", () => {
+    expect(cellsOf("25.5%", 1, 3)).toEqual(["25", ".5", "%"]);
+    expect(cellsOf("1.2%", 1, 3)).toEqual(["1.", "2", "%"]);
+    expect(cellsOf("3.33이다", 1, 3)).toEqual(["3.", "33", "이"]);
+    expect(cellsOf("10.03", 1, 3)).toEqual(["10", ".0", "3"]);
+    expect(cellsOf("100.3", 1, 3)).toEqual(["10", "0.", "3"]);
+  });
+
+  it("dấu , hàng nghìn ghép cặp: 51|,7|32|,5|86", () => {
+    expect(cellsOf("51,732,586명", 1, 6)).toEqual(["51", ",7", "32", ",5", "86", "명"]);
+  });
+
+  it("dấu . / , cuối số (không có chữ số theo sau) vẫn là dấu câu riêng", () => {
+    expect(cellsOf("2020.", 1, 3)).toEqual(["20", "20", "."]);
+    expect(cellsOf("1000mℓ, 1", 1, 5)).toEqual(["10", "00", "mℓ", ",", "1"]);
+  });
+
+  it("đơn vị viết gộp trong 1 ô", () => {
+    expect(cellsOf("1kg은", 1, 3)).toEqual(["1", "kg", "은"]);
+    expect(cellsOf("1MHz는 백만Hz", 1, 7)).toEqual(["1", "MHz", "는", undefined, "백", "만", "Hz"]);
+    expect(cellsOf("30°C", 1, 2)).toEqual(["30", "°C"]);
+    expect(cellsOf("100km/h", 1, 3)).toEqual(["10", "0", "km/h"]);
+  });
+
+  it("chữ Latin không phải đơn vị vẫn theo quy tắc cũ", () => {
+    expect(cellsOf("kgs", 1, 2)).toEqual(["kg", "s"]);
+    expect(cellsOf("MHzX", 1, 4)).toEqual(["M", "H", "z", "X"]);
+  });
+
+  it("phân số 1/2 viết trong 1 ô", () => {
+    expect(cellsOf("달의 1/2", 1, 4)).toEqual(["달", "의", undefined, "1/2"]);
+    expect(cellsOf("달의 ½", 4, 1)).toEqual(["½"]);
+  });
+});
+
 describe("layoutWongoji — dấu câu", () => {
   it(". , : ; chiếm 1 ô, không chừa ô trống phía sau", () => {
     const L = layoutWongoji("가,나.", 20);
@@ -114,33 +155,40 @@ describe("layoutWongoji — 말줄임표", () => {
     expect(L.counted).toBe(4); // 가 + … + … + 나
   });
 
-  it("... (3 dấu chấm liền) được nhận diện như 말줄임표 và gộp dấu chấm theo sau", () => {
-    const L = layoutWongoji("가....", 20); // ... (3 dấu) rồi thêm "." rời
-    // regex bắt hết `.{3,}` thành 1 atom "ell" nếu liền nhau (4 dấu chấm liên tục vẫn là 1 atom ell)
+  it("... (3 dấu chấm liền) được nhận diện như 말줄임표", () => {
+    const L = layoutWongoji("가...", 20);
     expect(textOf(L.cells.get(2))).toBe("…");
+    expect(textOf(L.cells.get(3))).toBe("…");
   });
 
-  it("dấu chấm ngay sau …… nhập chung vào ô cuối của 말줄임표", () => {
-    const L = layoutWongoji("가…….", 20);
-    expect(textOf(L.cells.get(2))).toBe("…");
-    const last = L.cells.get(3);
-    expect(last?.t).toBe("….");
-    expect(last?.tight).toBe(true);
-    expect(L.fixes["Gộp dấu chấm vào ô 말줄임표"]).toBe(1);
+  it("dấu chấm sau …… viết riêng ở ô kế tiếp: 에|…|…|.|”", () => {
+    const L = layoutWongoji('"오후에…….”', 20);
+    const row = [1, 2, 3, 4, 5, 6, 7, 8].map((p) => textOf(L.cells.get(p)));
+    expect(row).toEqual(["“", "오", "후", "에", "…", "…", ".", "”"]);
+  });
+});
+
+describe("layoutWongoji — 줄표", () => {
+  it("—— chiếm 2 ô (gõ — hoặc -- cũng vậy)", () => {
+    for (const src of ["가——아", "가—아", "가--아"]) {
+      const L = layoutWongoji(src, 20);
+      expect([1, 2, 3, 4].map((p) => textOf(L.cells.get(p)))).toEqual(["가", "—", "—", "아"]);
+    }
   });
 });
 
 describe("layoutWongoji — ngoặc kép/ngoặc đơn", () => {
-  it('."  gộp chung một ô khi ngoặc kép đóng theo ngay sau dấu chấm', () => {
+  it("dấu chấm và ngoặc đóng mỗi dấu 1 ô riêng: 라|.|”", () => {
     // dấu " đầu tiên là mở (dq: false->true), dấu " thứ hai là đóng (true->false)
     const L = layoutWongoji('가"나."', 20);
-    expect(textOf(L.cells.get(1))).toBe("가");
-    expect(textOf(L.cells.get(2))).toBe("“"); // ngoặc mở
-    expect(textOf(L.cells.get(3))).toBe("나");
-    const merged = L.cells.get(4);
-    expect(merged?.t).toBe(".”"); // "." + ngoặc đóng dùng chung 1 ô
-    expect(merged?.tight).toBe(true);
-    expect(L.fixes["Dấu chấm + ngoặc đóng dùng chung một ô"]).toBe(1);
+    expect([1, 2, 3, 4, 5].map((p) => textOf(L.cells.get(p)))).toEqual(["가", "“", "나", ".", "”"]);
+  });
+
+  it("ngoặc đóng rơi vào ô đầu dòng → theo dấu chấm ra ngoài lề", () => {
+    // cols=4: ô0 indent, “ 가 나 lấp ô1-3; "." và ” đều rơi đầu dòng 2
+    const L = layoutWongoji('"가나."', 4);
+    expect(L.cells.get(3)?.side).toBe(".”");
+    expect(L.cells.get(4)).toBeUndefined();
   });
 
   it("ngoặc mở không được đứng ở ô cuối dòng → đẩy xuống đầu dòng sau", () => {

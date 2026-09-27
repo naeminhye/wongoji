@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { type WongojiLayout, layoutWongoji, nearestSrc } from "../lib/wongojiLayout";
+import { type WongojiLayout, glyphScale, layoutWongoji, nearestSrc } from "../lib/wongojiLayout";
 import { computeCols, groupSizeForCols } from "../lib/responsiveCols";
 import { gutterMarkAt } from "../lib/gutterMarks";
 import { computeRows } from "../lib/pageRows";
@@ -228,7 +228,7 @@ export default function WongojiPaper({
                         focusAt(cl ? cl.start : nearestSrc(L, p, text.length));
                       }}
                     >
-                      <CellGlyph cell={cl} fontSize={cl?.narrow ? cell * 0.42 : cell * 0.66} />
+                      <CellGlyph cell={cl} fontSize={cell * glyphScale(cl)} />
                       {isCaret && (
                         <span
                           className="wg-caret"

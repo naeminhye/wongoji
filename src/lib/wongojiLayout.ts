@@ -6,18 +6,24 @@
 
     1. Mỗi âm tiết Hangul / Hanja hoàn chỉnh = 1 ô.
     2. Số Ả Rập & chữ Latin thường: 2 ký tự / ô, ghép trái→phải.
+       Dấu thập phân / dấu phân cách hàng nghìn NẰM TRONG số được ghép chung
+       như một ký tự của số: 25.5 → 25|.5 ; 1.2 → 1.|2 ; 100.3 → 10|0.|3 ;
+       51,732,586 → 51|,7|32|,5|86.
        Chữ Latin HOA: 1 ký tự / ô.
+       Đơn vị đo (kg, mℓ, MHz, Hz, km/h…) viết gộp trong 1 ô.
+       Phân số (½, hoặc gõ 1/2) viết trong 1 ô.
     3. Dấu cách = 1 ô; nếu rơi đúng ô đầu dòng thì BỎ, viết tiếp không lùi dòng.
     4. Dòng đầu bài & mỗi đoạn mới (sau \n): chừa trống ô đầu tiên (들여쓰기).
     5. . , : ; → 1 ô, KHÔNG chừa ô trống phía sau.
        ! ? → 1 ô, BẮT BUỘC chừa đúng 1 ô trống phía sau (tự chèn nếu thiếu).
        Dấu câu không được đứng ở ô đầu dòng mới → viết tràn ra lề, cạnh ký tự
        cuối dòng trên.
-    6. 말줄임표 ……(hoặc ... 3 dấu trở lên) chiếm 2 ô; nếu có `.` theo ngay sau,
-       dấu chấm nhập chung vào ô cuối của ……
-    7. Ngoặc kép/ngoặc đơn: viết lệch về góc ô; nếu ngoặc đóng đi liền sau
-       `.`/`,` thì dùng chung 1 ô. Ngoặc mở không được đứng ô cuối dòng →
-       đẩy xuống đầu dòng sau.
+    6. 말줄임표 ……(hoặc ... 3 dấu trở lên) chiếm 2 ô; dấu `.` theo sau (nếu có)
+       viết riêng ở ô kế tiếp: …|…|.
+       줄표 —— (hoặc — / -- ) chiếm 2 ô.
+    7. Ngoặc kép/ngoặc đơn: mỗi dấu 1 ô, viết lệch về góc ô; ngoặc đóng sau
+       `.`/`,` vẫn chiếm ô riêng: 라|.|”. Ngoặc mở không được đứng ô cuối
+       dòng → đẩy xuống đầu dòng sau.
     8. Q53/Q54 không có tiêu đề — việc này là quy ước ở tầng nội dung/UI,
        không phải của layout engine (engine chỉ layout chuỗi đưa vào).
 
@@ -81,10 +87,23 @@ export const REFERENCE_COLS = 20;
 const OPENERS = new Set(["“", "‘", "(", "[", "{", "「", "『", "《", "〈", "〔"]);
 const CLOSERS = new Set(["”", "’", ")", "]", "}", "」", "』", "》", "〉", "〕"]);
 
+/**
+ * Đơn vị đo viết gộp trong 1 ô ("단위는 한 칸에 덩어리로 써 준다").
+ * Chỉ khớp khi đứng thành một cụm riêng — không nằm giữa một từ Latin dài hơn.
+ */
+const UNIT_RE =
+  /^(?:km\/h|m\/s|kWh|kcal|cal|[kMGT]Hz|Hz|[kMGT]B|[kMG]W|[kcm]?m[²³]|[kcmd]?m|[kmd]?[gℓlL]|cc|dB|ppm|°[CF])(?![A-Za-zℓ²³0-9])/;
+
+/** số: chữ số, cho phép dấu `.` / `,` nằm GIỮA các chữ số (thập phân, hàng nghìn) */
+const NUMBER_RE = /^[0-9]+(?:[.,][0-9]+)*/;
+/** phân số gõ dạng 1/2, 3/4 … → 1 ô */
+const FRACTION_RE = /^[0-9]{1,2}\/[0-9]{1,2}(?![0-9/])/;
+
 type Atom =
   | { k: "nl"; start: number; end: number }
   | { k: "sp"; start: number; end: number; eaten?: boolean; auto?: boolean }
   | { k: "ell"; start: number; end: number }
+  | { k: "dash"; start: number; end: number }
   | { k: "tail"; t: string; start: number; end: number }
   | { k: "mark"; t: string; start: number; end: number }
   | { k: "open"; t: string; start: number; end: number }
@@ -118,11 +137,19 @@ function tokenize(src: string): Atom[] {
       continue;
     }
 
-    // 말줄임표: … hoặc ... (3 dấu chấm trở lên)
-    const ell = /^(?:…+|\.{3,})/.exec(src.slice(i));
+    // 말줄임표: …… / … hoặc ... (3 dấu chấm trở lên, dấu thứ 4+ là mắt chấm câu → ô riêng)
+    const ell = /^(?:…+|\.{3})/.exec(src.slice(i));
     if (ell) {
       atoms.push({ k: "ell", start, end: i + ell[0].length });
       i += ell[0].length;
+      continue;
+    }
+
+    // 줄표: —— / — / ―― / -- → 2 ô
+    const dash = /^(?:[—―]+|-{2,})/.exec(src.slice(i));
+    if (dash) {
+      atoms.push({ k: "dash", start, end: i + dash[0].length });
+      i += dash[0].length;
       continue;
     }
 
@@ -143,13 +170,28 @@ function tokenize(src: string): Atom[] {
       continue;
     }
 
+    const prevCh = src[i - 1] || "";
+    const frac = !/[0-9]/.test(prevCh) ? FRACTION_RE.exec(src.slice(i)) : null;
+    if (frac) {
+      atoms.push({ k: "cell", t: frac[0], start, end: i + frac[0].length, narrow: true });
+      i += frac[0].length;
+      continue;
+    }
+
     if (/[0-9]/.test(c)) {
-      const run = /^[0-9]+/.exec(src.slice(i))![0];
+      const run = NUMBER_RE.exec(src.slice(i))![0];
       for (let p = 0; p < run.length; p += 2) {
         const t = run.slice(p, p + 2);
         atoms.push({ k: "cell", t, start: i + p, end: i + p + t.length, narrow: true });
       }
       i += run.length;
+      continue;
+    }
+
+    const unit = !/[A-Za-zℓ]/.test(prevCh) ? UNIT_RE.exec(src.slice(i)) : null;
+    if (unit) {
+      atoms.push({ k: "cell", t: unit[0], start, end: i + unit[0].length, narrow: true, latin: true });
+      i += unit[0].length;
       continue;
     }
 
@@ -237,7 +279,6 @@ export function layoutWongoji(src: string, cols: number): WongojiLayout {
 
   for (let idx = 0; idx < atoms.length; idx++) {
     const a = atoms[idx];
-    const prev = atoms[idx - 1];
     caretMap.push({ src: a.start, pos });
     const col = colOf(pos);
 
@@ -269,15 +310,16 @@ export function layoutWongoji(src: string, cols: number): WongojiLayout {
         break;
       }
 
+      case "dash": {
+        put(pos, { t: "—", kind: "punc", start: a.start });
+        pos++;
+        put(pos, { t: "—", kind: "punc", start: a.start });
+        pos++;
+        counted += 2;
+        break;
+      }
+
       case "tail": {
-        // dấu chấm ngay sau … → nhập chung ô với … cuối
-        if (prev && prev.k === "ell" && a.t === "." && lastPos !== null) {
-          const c = cells.get(lastPos)!;
-          c.t = "…" + a.t;
-          c.tight = true;
-          note("Gộp dấu chấm vào ô 말줄임표");
-          break;
-        }
         if (col === 0 && lastPos !== null) {
           attach(a.t);
           note("Dấu câu đầu dòng → đưa ra ngoài ô cuối dòng trên");
@@ -302,18 +344,6 @@ export function layoutWongoji(src: string, cols: number): WongojiLayout {
       }
 
       case "close": {
-        // ." hoặc ,' dùng chung một ô
-        if (prev && prev.k === "tail" && lastPos !== null) {
-          const c = cells.get(lastPos)!;
-          if (c.side) {
-            c.side += a.t;
-          } else {
-            c.t = c.t + a.t;
-            c.tight = true;
-          }
-          note("Dấu chấm + ngoặc đóng dùng chung một ô");
-          break;
-        }
         if (col === 0 && lastPos !== null) {
           attach(a.t);
           note("Dấu câu đầu dòng → đưa ra ngoài ô cuối dòng trên");
@@ -366,6 +396,15 @@ export function layoutWongoji(src: string, cols: number): WongojiLayout {
  */
 export function countWongoji(src: string): number {
   return layoutWongoji(src, REFERENCE_COLS).counted;
+}
+
+/**
+ * Tỉ lệ cỡ chữ so với cạnh ô: âm tiết đầy đủ 0.66, cặp số/chữ Latin thường
+ * 0.42, cụm 3+ ký tự (MHz, kcal, 1/2, km/h…) nhỏ hơn nữa để vừa trong 1 ô.
+ */
+export function glyphScale(cell: WongojiCell | undefined): number {
+  if (!cell?.narrow) return 0.66;
+  return cell.t.length >= 3 ? 0.3 : 0.42;
 }
 
 /** Tìm vị trí nguồn gần nhất khi bấm vào một ô trống trong lưới. */

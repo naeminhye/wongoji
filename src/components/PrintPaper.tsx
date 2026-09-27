@@ -1,4 +1,4 @@
-import { layoutWongoji } from "../lib/wongojiLayout";
+import { glyphScale, layoutWongoji } from "../lib/wongojiLayout";
 import { groupSizeForCols } from "../lib/responsiveCols";
 import { gutterMarkAt } from "../lib/gutterMarks";
 import { computeRows } from "../lib/pageRows";
@@ -124,7 +124,7 @@ export default function PrintPaper({ text, fontFamily, minCells, maxCells, cellS
                       lineHeight: 1,
                     }}
                   >
-                    <CellGlyph cell={cl} fontSize={cl?.narrow ? `${PRINT_CELL_MM * 0.42}mm` : `${PRINT_CELL_MM * 0.66}mm`} />
+                    <CellGlyph cell={cl} fontSize={`${PRINT_CELL_MM * glyphScale(cl)}mm`} />
                   </div>
                 );
               })}
